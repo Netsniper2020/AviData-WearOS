@@ -56,6 +56,9 @@ object AviDataProvider {
 
     private fun gpsAltMsl(location: Location?, hasGps: Boolean, geoidM: Int): Int? {
         if (!hasGps || location == null) return null
+        if (!location.hasAltitude()) return null
+        // Reject altitude=0.0 from partial 2D fix with poor accuracy
+        if (location.altitude == 0.0 && (!location.hasAccuracy() || location.accuracy > 20f)) return null
         val altMsl = location.altitude - geoidM
         return (altMsl * 3.28084).toInt()
     }

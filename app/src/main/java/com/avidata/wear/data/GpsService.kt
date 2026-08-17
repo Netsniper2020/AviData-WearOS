@@ -68,8 +68,11 @@ class GpsService : Service(), SensorEventListener {
             lastGpsTimeMs = SystemClock.elapsedRealtime()
             _gpsStale.value = false
 
-            // Vario computation
+            // Vario computation — only with valid altitude fix
             val now = SystemClock.elapsedRealtime()
+            if (!loc.hasAltitude() || (loc.altitude == 0.0 && (loc.accuracy > 20f || !loc.hasAccuracy()))) {
+                // No altitude fix yet — skip vario and don't update prevAlt
+            } else {
             val currentAlt = loc.altitude
             val prev = prevAltM
             if (prev != null && prevAltTime > 0) {

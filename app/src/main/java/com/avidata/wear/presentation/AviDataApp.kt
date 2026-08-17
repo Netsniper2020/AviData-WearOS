@@ -4,6 +4,9 @@ import android.content.BatteryManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.os.BatteryManager
+import android.content.Intent
+import android.content.IntentFilter
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -28,6 +31,7 @@ val AviGreen = Color(0xFF00FF00)
 val AviRed = Color(0xFFFF4444)
 val AviGray = Color(0xFF888888)
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun AviDataApp(onExit: () -> Unit) {
     val context = LocalContext.current
@@ -65,9 +69,10 @@ fun AviDataApp(onExit: () -> Unit) {
     val temperatureC by GpsService.temperatureC.collectAsState()
 
     // Battery
-    val batteryPct = remember {
+    var batteryPct by remember { mutableIntStateOf(50) }
+    LaunchedEffect(Unit) {
         val bm = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
-        bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        batteryPct = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
     }
 
     // Tick every second for time updates

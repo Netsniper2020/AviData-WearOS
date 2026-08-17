@@ -96,6 +96,10 @@ object AviDataProvider {
     private fun groundSpeed(location: Location?, hasGps: Boolean, stale: Boolean): FieldData {
         if (!hasGps) return FieldData("GS", "NoGPS", "kt")
         if (stale || location == null || !location.hasSpeed()) return FieldData("GS", "- - -", "kt")
+        // Reject zero speed from partial 2D fix with poor accuracy
+        if (location.speed == 0f && (!location.hasAccuracy() || location.accuracy > 20f)) {
+            return FieldData("GS", "- - -", "kt")
+        }
         val kts = (location.speed / 0.514444f).toInt()
         return FieldData("GS", "$kts", "kt")
     }
@@ -103,6 +107,10 @@ object AviDataProvider {
     private fun gpsTrack(location: Location?, hasGps: Boolean, stale: Boolean): FieldData {
         if (!hasGps) return FieldData("TRK", "NoGPS", "°")
         if (stale || location == null || !location.hasBearing()) return FieldData("TRK", "- - -", "°")
+        // Reject zero bearing from partial fix with poor accuracy
+        if (location.bearing == 0f && location.speed == 0f && (!location.hasAccuracy() || location.accuracy > 20f)) {
+            return FieldData("TRK", "- - -", "°")
+        }
         val deg = location.bearing.toInt().let { if (it < 0) it + 360 else it }
         return FieldData("TRK", "%03d".format(deg), "°")
     }

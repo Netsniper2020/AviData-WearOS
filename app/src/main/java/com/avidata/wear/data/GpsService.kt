@@ -1,7 +1,9 @@
 package com.avidata.wear.data
 
 import android.Manifest
-import android.app.*
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -10,10 +12,17 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.location.Location
-import android.os.*
+import android.os.IBinder
+import android.os.Looper
+import android.os.SystemClock
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
-import com.google.android.gms.location.*
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -35,29 +44,33 @@ class GpsService : Service(), SensorEventListener {
         private val _vSpeedFpm = MutableStateFlow<Float?>(null)
         val vSpeedFpm: StateFlow<Float?> = _vSpeedFpm
 
+        private val _vSpeedBaroFpm = MutableStateFlow<Float?>(null)
+        val vSpeedBaroFpm: StateFlow<Float?> = _vSpeedBaroFpm
+
         private val _pressureHpa = MutableStateFlow<Float?>(null)
         val pressureHpa: StateFlow<Float?> = _pressureHpa
 
         private val _temperatureC = MutableStateFlow<Float?>(null)
         val temperatureC: StateFlow<Float?> = _temperatureC
 
-        private val _vSpeedBaroFpm = MutableStateFlow<Float?>(null)
-        val vSpeedBaroFpm: StateFlow<Float?> = _vSpeedBaroFpm
-
         private var lastGpsTimeMs = 0L
     }
 
     private lateinit var fusedClient: FusedLocationProviderClient
     private lateinit var sensorMgr: SensorManager
-    private var prevAltM: Double? = null
-    private var prevAltTime: Long = 0L
-    private var smoothedVSpeed = 0f
-    private var prevPressureAltFt: Float? = null
-    private var prevPressureTime: Long = 0L
-    private var smoothedBaroVSpeed = 0f
-    private val handler = Handler(Looper.getMainLooper())
 
-    // Staleness checker every 500ms
+    // GPS vario state
+    private var prevAltM: Double? = null
+    private var prevAltTime = 0L
+    private var smoothedVSpeed = 0f
+
+    // Baro vario state
+    private var prevPressureAltFt: Float? = null
+    private var prevPressureTime = 0L
+    private var smoothedBaroVSpeed = 0f
+
+    private val handler = android.os.Handler(Looper.getMainLooper())
+
     private val stalenessCheck = object : Runnable {
         override fun run() {
             val elapsed = SystemClock.elapsedRealtime() - lastGpsTimeMs
@@ -74,25 +87,24 @@ class GpsService : Service(), SensorEventListener {
             lastGpsTimeMs = SystemClock.elapsedRealtime()
             _gpsStale.value = false
 
-            // Vario computation — only with valid altitude fix
+            // GPS vario — only with valid altitude
             val now = SystemClock.elapsedRealtime()
-            if (!loc.hasAltitude() || (loc.altitude == 0.0 && (loc.accuracy > 20f || !loc.hasAccuracy()))) {
-                // No altitude fix yet — skip vario and don't update prevAlt
-            } else {
-            val currentAlt = loc.altitude
-            val prev = prevAltM
-            if (prev != null && prevAltTime > 0) {
-                val dtMs = now - prevAltTime
-                if (dtMs in 1..5000) {
-                    val dtSec = dtMs / 1000f
-                    val dAltFt = ((currentAlt - prev) * 3.28084).toFloat()
-                    val rawFpm = (dAltFt / dtSec) * 60f
-                    smoothedVSpeed = smoothedVSpeed * 0.7f + rawFpm * 0.3f
-                    _vSpeedFpm.value = smoothedVSpeed
+            if (loc.hasAltitude() && !(loc.altitude == 0.0 && (!loc.hasAccuracy() || loc.accuracy > 20f))) {
+                val currentAlt = loc.altitude
+                val prev = prevAltM
+                if (prev != null && prevAltTime > 0) {
+                    val dtMs = now - prevAltTime
+                    if (dtMs in 1..5000) {
+                        val dtSec = dtMs / 1000f
+                        val dAltFt = ((currentAlt - prev) * 3.28084).toFloat()
+                        val rawFpm = (dAltFt / dtSec) * 60f
+                        smoothedVSpeed = smoothedVSpeed * 0.7f + rawFpm * 0.3f
+                        _vSpeedFpm.value = smoothedVSpeed
+                    }
                 }
+                prevAltM = currentAlt
+                prevAltTime = now
             }
-            prevAltM = currentAlt
-            prevAltTime = now
         }
     }
 
@@ -102,14 +114,14 @@ class GpsService : Service(), SensorEventListener {
         fusedClient = LocationServices.getFusedLocationProviderClient(this)
         sensorMgr = getSystemService(Context.SENSOR_SERVICE) as SensorManager
 
-        // Barometer
-        sensorMgr.getDefaultSensor(Sensor.TYPE_PRESSURE)?.let {
-            sensorMgr.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
+        val pressureSensor: Sensor? = sensorMgr.getDefaultSensor(Sensor.TYPE_PRESSURE)
+        if (pressureSensor != null) {
+            sensorMgr.registerListener(this, pressureSensor, SensorManager.SENSOR_DELAY_NORMAL)
         }
 
-        // Ambient temperature
-        sensorMgr.getDefaultSensor(Sensor.TYPE_AMBIENT_TEMPERATURE)?.let {
-            sensorMgr.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
+        val tempSensor: Sensor? = sensorMgr.getDefaultSensor(Sensor.TYPE_AMBIENT_TEMPERATURE)
+        if (tempSensor != null) {
+            sensorMgr.registerListener(this, tempSensor, SensorManager.SENSOR_DELAY_NORMAL)
         }
 
         handler.post(stalenessCheck)
@@ -144,7 +156,8 @@ class GpsService : Service(), SensorEventListener {
             Sensor.TYPE_PRESSURE -> {
                 val p = event.values[0]
                 _pressureHpa.value = p
-                // Compute barometric vario from pressure altitude change
+
+                // Baro vario from pressure altitude change
                 val paFt = (145366.45 * (1.0 - Math.pow((p / 1013.25).toDouble(), 0.190284))).toFloat()
                 val now = SystemClock.elapsedRealtime()
                 val prevPA = prevPressureAltFt
@@ -160,7 +173,9 @@ class GpsService : Service(), SensorEventListener {
                 prevPressureAltFt = paFt
                 prevPressureTime = now
             }
-            Sensor.TYPE_AMBIENT_TEMPERATURE -> _temperatureC.value = event.values[0]
+            Sensor.TYPE_AMBIENT_TEMPERATURE -> {
+                _temperatureC.value = event.values[0]
+            }
         }
     }
 

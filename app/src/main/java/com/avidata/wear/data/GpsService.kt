@@ -41,6 +41,9 @@ class GpsService : Service(), SensorEventListener {
         private val _temperatureC = MutableStateFlow<Float?>(null)
         val temperatureC: StateFlow<Float?> = _temperatureC
 
+        private val _vSpeedBaroFpm = MutableStateFlow<Float?>(null)
+        val vSpeedBaroFpm: StateFlow<Float?> = _vSpeedBaroFpm
+
         private var lastGpsTimeMs = 0L
     }
 
@@ -49,6 +52,9 @@ class GpsService : Service(), SensorEventListener {
     private var prevAltM: Double? = null
     private var prevAltTime: Long = 0L
     private var smoothedVSpeed = 0f
+    private var prevPressureAltFt: Float? = null
+    private var prevPressureTime: Long = 0L
+    private var smoothedBaroVSpeed = 0f
     private val handler = Handler(Looper.getMainLooper())
 
     // Staleness checker every 500ms
@@ -135,7 +141,25 @@ class GpsService : Service(), SensorEventListener {
 
     override fun onSensorChanged(event: SensorEvent) {
         when (event.sensor.type) {
-            Sensor.TYPE_PRESSURE -> _pressureHpa.value = event.values[0]
+            Sensor.TYPE_PRESSURE -> {
+                val p = event.values[0]
+                _pressureHpa.value = p
+                // Compute barometric vario from pressure altitude change
+                val paFt = (145366.45 * (1.0 - Math.pow((p / 1013.25).toDouble(), 0.190284))).toFloat()
+                val now = SystemClock.elapsedRealtime()
+                val prevPA = prevPressureAltFt
+                if (prevPA != null && prevPressureTime > 0) {
+                    val dtMs = now - prevPressureTime
+                    if (dtMs in 100..5000) {
+                        val dtSec = dtMs / 1000f
+                        val rawFpm = ((paFt - prevPA) / dtSec) * 60f
+                        smoothedBaroVSpeed = smoothedBaroVSpeed * 0.7f + rawFpm * 0.3f
+                        _vSpeedBaroFpm.value = smoothedBaroVSpeed
+                    }
+                }
+                prevPressureAltFt = paFt
+                prevPressureTime = now
+            }
             Sensor.TYPE_AMBIENT_TEMPERATURE -> _temperatureC.value = event.values[0]
         }
     }

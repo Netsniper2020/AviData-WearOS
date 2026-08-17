@@ -8,7 +8,7 @@ import kotlin.math.pow
 
 enum class DataFieldType {
     NONE, GPS_ALT, QNH_ALT, GPS_QNH_ALT, GROUND_SPEED, GPS_TRACK,
-    V_SPEED, LAT, LON, UTC_TIME, LOCAL_TIME, BATTERY, PRESSURE,
+    V_SPEED, V_SPEED_BARO, LAT, LON, UTC_TIME, LOCAL_TIME, BATTERY, PRESSURE,
     GPS_ACCURACY, OAT, DENSITY_ALT
 }
 
@@ -32,6 +32,7 @@ object AviDataProvider {
         qnhHpa: Int,
         geoidM: Int,
         vSpeedFpm: Float?,
+        vSpeedBaroFpm: Float?,
         pressureHpa: Float?,
         temperatureC: Float?,
         batteryPct: Int
@@ -42,6 +43,7 @@ object AviDataProvider {
         DataFieldType.GROUND_SPEED -> groundSpeed(location, hasGps, gpsStale)
         DataFieldType.GPS_TRACK -> gpsTrack(location, hasGps, gpsStale)
         DataFieldType.V_SPEED -> vSpeed(hasGps, gpsStale, vSpeedFpm)
+        DataFieldType.V_SPEED_BARO -> vSpeedBaro(vSpeedBaroFpm)
         DataFieldType.LAT -> lat(location, hasGps)
         DataFieldType.LON -> lon(location, hasGps)
         DataFieldType.UTC_TIME -> utcTime()
@@ -116,11 +118,18 @@ object AviDataProvider {
     }
 
     private fun vSpeed(hasGps: Boolean, stale: Boolean, vSpeedFpm: Float?): FieldData {
-        if (!hasGps) return FieldData("VS", "NoGPS", "ft/m")
-        if (stale || vSpeedFpm == null) return FieldData("VS", "- - -", "ft/m")
+        if (!hasGps) return FieldData("VS GPS", "NoGPS", "ft/m")
+        if (stale || vSpeedFpm == null) return FieldData("VS GPS", "- - -", "ft/m")
         val vs = vSpeedFpm.toInt()
         val sign = if (vs > 0) "+" else ""
-        return FieldData("VS", "$sign$vs", "ft/m")
+        return FieldData("VS GPS", "$sign$vs", "ft/m")
+    }
+
+    private fun vSpeedBaro(vSpeedBaroFpm: Float?): FieldData {
+        if (vSpeedBaroFpm == null) return FieldData("VS BAR", "---", "ft/m")
+        val vs = vSpeedBaroFpm.toInt()
+        val sign = if (vs > 0) "+" else ""
+        return FieldData("VS BAR", "$sign$vs", "ft/m")
     }
 
     private fun lat(location: Location?, hasGps: Boolean): FieldData {

@@ -56,7 +56,8 @@ val FIELD_LABELS = mapOf(
     DataFieldType.GPS_QNH_ALT to "Alt GPS + QNH (ft)",
     DataFieldType.GROUND_SPEED to "Vitesse sol (kt)",
     DataFieldType.GPS_TRACK to "Route GPS (°)",
-    DataFieldType.V_SPEED to "Vit. verticale (ft/m)",
+    DataFieldType.V_SPEED to "Vario GPS (ft/m)",
+    DataFieldType.V_SPEED_BARO to "Vario Baro (ft/m)",
     DataFieldType.LAT to "Latitude",
     DataFieldType.LON to "Longitude",
     DataFieldType.UTC_TIME to "Heure UTC",
@@ -114,6 +115,7 @@ fun AviDataApp(onExit: () -> Unit) {
     val hasGps by GpsService.hasGps.collectAsState()
     val gpsStale by GpsService.gpsStale.collectAsState()
     val vSpeedFpm by GpsService.vSpeedFpm.collectAsState()
+    val vSpeedBaroFpm by GpsService.vSpeedBaroFpm.collectAsState()
     val pressureHpa by GpsService.pressureHpa.collectAsState()
     val temperatureC by GpsService.temperatureC.collectAsState()
 
@@ -370,19 +372,20 @@ fun DataPage(
     location: android.location.Location?,
     hasGps: Boolean, gpsStale: Boolean,
     qnhHpa: Int, geoidM: Int,
-    vSpeedFpm: Float?, pressureHpa: Float?, temperatureC: Float?,
+    vSpeedFpm: Float?, vSpeedBaroFpm: Float?,
+    pressureHpa: Float?, temperatureC: Float?,
     batteryPct: Int
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 28.dp)) {
             Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                QuadrantCell(slots[0], false, location, hasGps, gpsStale, qnhHpa, geoidM, vSpeedFpm, pressureHpa, temperatureC, batteryPct, Modifier.weight(1f).fillMaxHeight())
-                QuadrantCell(slots[1], false, location, hasGps, gpsStale, qnhHpa, geoidM, vSpeedFpm, pressureHpa, temperatureC, batteryPct, Modifier.weight(1f).fillMaxHeight())
+                QuadrantCell(slots[0], false, location, hasGps, gpsStale, qnhHpa, geoidM, vSpeedFpm, vSpeedBaroFpm, pressureHpa, temperatureC, batteryPct, Modifier.weight(1f).fillMaxHeight())
+                QuadrantCell(slots[1], false, location, hasGps, gpsStale, qnhHpa, geoidM, vSpeedFpm, vSpeedBaroFpm, pressureHpa, temperatureC, batteryPct, Modifier.weight(1f).fillMaxHeight())
             }
             Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(AviGray))
             Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                QuadrantCell(slots[2], true, location, hasGps, gpsStale, qnhHpa, geoidM, vSpeedFpm, pressureHpa, temperatureC, batteryPct, Modifier.weight(1f).fillMaxHeight())
-                QuadrantCell(slots[3], true, location, hasGps, gpsStale, qnhHpa, geoidM, vSpeedFpm, pressureHpa, temperatureC, batteryPct, Modifier.weight(1f).fillMaxHeight())
+                QuadrantCell(slots[2], true, location, hasGps, gpsStale, qnhHpa, geoidM, vSpeedFpm, vSpeedBaroFpm, pressureHpa, temperatureC, batteryPct, Modifier.weight(1f).fillMaxHeight())
+                QuadrantCell(slots[3], true, location, hasGps, gpsStale, qnhHpa, geoidM, vSpeedFpm, vSpeedBaroFpm, pressureHpa, temperatureC, batteryPct, Modifier.weight(1f).fillMaxHeight())
             }
         }
     }
@@ -392,14 +395,14 @@ fun DataPage(
 fun QuadrantCell(
     fieldType: DataFieldType, isBottom: Boolean,
     location: android.location.Location?, hasGps: Boolean, gpsStale: Boolean,
-    qnhHpa: Int, geoidM: Int, vSpeedFpm: Float?, pressureHpa: Float?,
-    temperatureC: Float?, batteryPct: Int, modifier: Modifier
+    qnhHpa: Int, geoidM: Int, vSpeedFpm: Float?, vSpeedBaroFpm: Float?,
+    pressureHpa: Float?, temperatureC: Float?, batteryPct: Int, modifier: Modifier
 ) {
     if (fieldType == DataFieldType.NONE) { Box(modifier = modifier); return }
 
     val data = AviDataProvider.getFieldData(
         fieldType, location, hasGps, gpsStale, qnhHpa, geoidM,
-        vSpeedFpm, pressureHpa, temperatureC, batteryPct
+        vSpeedFpm, vSpeedBaroFpm, pressureHpa, temperatureC, batteryPct
     )
 
     Column(

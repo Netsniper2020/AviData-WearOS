@@ -163,10 +163,10 @@ class GpsService : Service(), SensorEventListener {
                 val prevPA = prevPressureAltFt
                 if (prevPA != null && prevPressureTime > 0) {
                     val dtMs = now - prevPressureTime
-                    if (dtMs in 100..5000) {
+                    if (dtMs in 500..5000) {
                         val dtSec = dtMs / 1000f
                         val rawFpm = ((paFt - prevPA) / dtSec) * 60f
-                        smoothedBaroVSpeed = smoothedBaroVSpeed * 0.7f + rawFpm * 0.3f
+                        smoothedBaroVSpeed = smoothedBaroVSpeed * 0.92f + rawFpm * 0.08f
                         _vSpeedBaroFpm.value = smoothedBaroVSpeed
                     }
                 }

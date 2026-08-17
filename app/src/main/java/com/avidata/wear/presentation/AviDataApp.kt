@@ -164,7 +164,7 @@ fun AviDataApp(onExit: () -> Unit) {
                             slots = Array(4) { slots[page][it].value },
                             location = location, hasGps = hasGps, gpsStale = gpsStale,
                             qnhHpa = qnhHpa, geoidM = geoidM, vSpeedFpm = vSpeedFpm,
-                            pressureHpa = pressureHpa, temperatureC = temperatureC,
+                            vSpeedBaroFpm = vSpeedBaroFpm, pressureHpa = pressureHpa, temperatureC = temperatureC,
                             batteryPct = batteryPct
                         )
                     }
